@@ -257,7 +257,7 @@ function LogItem:Log(message, customData)
 	-- FireAnalyticsLogEvent(logLevelNum, string.format("%*: %*", self._log._name, message), self._traceback, customData)
 
 	if self._modifiers.Throw then
-		error(logMessage .. (customData and " " .. HttpService:JSONEncode(customData)) or "", 4)
+		error(logMessage .. (if customData then " " .. HttpService:JSONEncode(customData) else ""), 4)
 	elseif logLevelNum < logLevels.Warning then
 		print(logMessage, customData or "")
 	else
