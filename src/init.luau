@@ -1,3 +1,6 @@
+--!native
+--!optimize 2
+
 -- Log
 -- Stephen Leitnick
 -- April 20, 2021
@@ -112,7 +115,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
-local ClassDefinition = require(script.ClassDefinition)
+local ClassDefinition = require(script:FindFirstChild("ClassDefinition"))
+local InfoLog = require(script:FindFirstChild("InfoLog"))
+
+export type Log = ClassDefinition.Log
+export type LogItem = ClassDefinition.LogItem
 
 local IS_STUDIO = RunService:IsStudio()
 local IS_SERVER = RunService:IsServer()
@@ -120,6 +127,9 @@ local IS_SERVER = RunService:IsServer()
 local AnalyticsLogLevel = Enum.AnalyticsLogLevel
 
 local configModule = ReplicatedStorage:FindFirstChild("LogConfig", true)
+	or ReplicatedStorage:FindFirstChild("log-config", true)
+
+local UseInfoLogForInfo = false
 
 local config = "Debug"
 if configModule then
@@ -178,7 +188,7 @@ local function ToSeconds(n, timeUnit)
 	elseif timeUnit == timeUnits.Years then
 		return n * 31_536_000
 	else
-		error("Unknown time unit", 2)
+		error(`Unknown time unit {timeUnit}`, 2)
 	end
 end
 
@@ -252,16 +262,47 @@ function LogItem:Log(message, customData)
 	end
 
 	stats:_setTimestamp(timeFunc())
-	local logMessage = string.format("%*: [%*] %*", self._log._name, self._levelName, message)
+	local logMessage = `{self._log._name}: [{self._levelName}] {message}`
 	local logLevelNum = logLevels[self._levelName]
-	-- FireAnalyticsLogEvent(logLevelNum, string.format("%*: %*", self._log._name, message), self._traceback, customData)
 
-	if self._modifiers.Throw then
-		error(logMessage .. (if customData then " " .. HttpService:JSONEncode(customData) else ""), 4)
-	elseif logLevelNum < logLevels.Warning then
-		print(logMessage, customData or "")
+	if UseInfoLogForInfo or self._log._useInfoLog then
+		if self._modifiers.Throw then
+			error(logMessage .. (if customData then " " .. HttpService:JSONEncode(customData) else ""), 4)
+		elseif logLevelNum == logLevels.Info then
+			if customData ~= nil then
+				InfoLog(logMessage, customData or "")
+			else
+				InfoLog(logMessage)
+			end
+		elseif logLevelNum < logLevels.Warning then
+			if customData ~= nil then
+				print(logMessage, customData or "")
+			else
+				print(logMessage)
+			end
+		else
+			if customData then
+				warn(logMessage, customData or "")
+			else
+				warn(logMessage)
+			end
+		end
 	else
-		warn(logMessage, customData or "")
+		if self._modifiers.Throw then
+			error(logMessage .. (if customData then " " .. HttpService:JSONEncode(customData) else ""), 4)
+		elseif logLevelNum < logLevels.Warning then
+			if customData ~= nil then
+				print(logMessage, customData or "")
+			else
+				print(logMessage)
+			end
+		else
+			if customData ~= nil then
+				warn(logMessage, customData or "")
+			else
+				warn(logMessage)
+			end
+		end
 	end
 end
 
@@ -280,22 +321,8 @@ function LogItem:Assert(condition, ...)
 end
 
 function LogItem:__tostring()
-	return string.format("LogItem<%*>", self._log._name)
+	return `LogItem<{self._log._name}>`
 end
-
--- local LogItemBlank = {}
--- LogItemBlank.ClassName = "LogItemBlank"
--- LogItemBlank.__index = LogItemBlank
--- setmetatable(LogItemBlank, LogItem)
-
--- function LogItemBlank.new(...)
--- 	local self = LogItem.new(...)
--- 	return setmetatable(self, LogItemBlank)
--- end
-
--- function LogItemBlank:Log()
--- 	-- Do nothing
--- end
 
 local LogStats = {}
 LogStats.ClassName = "LogStats"
@@ -535,17 +562,18 @@ end
 
 	@return Log
 ]=]
-function Log.new()
+function Log.new(useInfoLog: boolean?): Log
 	local name = GetName(debug.info(2, "s"))
-	return Log.ForName(name)
+	return Log.ForName(name, useInfoLog)
 end
 
-function Log.ForName(scriptName: string)
+function Log.ForName(scriptName: string, useInfoLog: boolean?): Log
 	debug.setmemorycategory(scriptName)
 	local self = setmetatable({}, Log)
 
 	self._name = scriptName
 	self._stats = {}
+	self._useInfoLog = not not useInfoLog
 
 	self.Debug = self:AtDebug():Wrap()
 	self.Error = self:AtError():Wrap()
@@ -557,6 +585,15 @@ function Log.ForName(scriptName: string)
 	self.ErrorThrow = self:AtError():Throw():Wrap()
 	self.FatalThrow = self:AtFatal():Throw():Wrap()
 
+	return self :: any
+end
+
+function Log.SetInfoLogEnabled(enabled: boolean)
+	UseInfoLogForInfo = enabled
+end
+
+function Log:SetInfoLog(useInfoLog: boolean): Log
+	self._useInfoLog = useInfoLog
 	return self
 end
 
@@ -570,7 +607,7 @@ function Log:_getLogStats(key)
 	return stats
 end
 
-function Log:_at(level)
+function Log:_at(level): any
 	local l, f = debug.info(3, "lf")
 	local traceback = debug.traceback("Log", 3)
 	local key = tostring(l) .. tostring(f)
@@ -588,7 +625,7 @@ end
 	@param level LogLevel
 	@return LogItem
 ]=]
-function Log:At(level: number)
+function Log:At(level: number): LogItem
 	return self:_at(level)
 end
 
@@ -596,7 +633,7 @@ end
 	@return LogItem
 	Get a LogItem at the Trace log level.
 ]=]
-function Log:AtTrace()
+function Log:AtTrace(): LogItem
 	return self:_at(Log.Level.Trace)
 end
 
@@ -604,7 +641,7 @@ end
 	@return LogItem
 	Get a LogItem at the Debug log level.
 ]=]
-function Log:AtDebug()
+function Log:AtDebug(): LogItem
 	return self:_at(Log.Level.Debug)
 end
 
@@ -612,7 +649,7 @@ end
 	@return LogItem
 	Get a LogItem at the Info log level.
 ]=]
-function Log:AtInfo()
+function Log:AtInfo(): LogItem
 	return self:_at(Log.Level.Info)
 end
 
@@ -620,7 +657,7 @@ end
 	@return LogItem
 	Get a LogItem at the Warning log level.
 ]=]
-function Log:AtWarning()
+function Log:AtWarning(): LogItem
 	return self:_at(Log.Level.Warning)
 end
 
@@ -628,7 +665,7 @@ end
 	@return LogItem
 	Get a LogItem at the Error log level.
 ]=]
-function Log:AtError()
+function Log:AtError(): LogItem
 	return self:_at(Log.Level.Error)
 end
 
@@ -636,7 +673,7 @@ end
 	@return LogItem
 	Get a LogItem at the Fatal log level.
 ]=]
-function Log:AtFatal()
+function Log:AtFatal(): LogItem
 	return self:_at(Log.Level.Fatal)
 end
 
@@ -657,7 +694,7 @@ end
 
 function Log:Destroy() end
 function Log:__tostring()
-	return string.format("Log<%*>", self._name)
+	return `Log<{self._name}>`
 end
 
 -- Determine log level:
@@ -808,7 +845,6 @@ do
 	-- end
 end
 
-export type Log = ClassDefinition.Log
-export type LogItem = ClassDefinition.LogItem
+--export type Log = typeof(Log.new())
 table.freeze(Log)
 return Log
