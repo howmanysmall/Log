@@ -1,0 +1,102 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"formatter": {
+		"enabled": true,
+		"formatWithErrors": true,
+		"indentStyle": "tab",
+		"indentWidth": 4,
+		"lineEnding": "lf",
+		"lineWidth": 120,
+		"ignore": ["**/node_modules/**", "garbage/**"],
+		"include": ["*.json", "*.jsonc", "*.code-workspace", "*code-snippets"]
+	},
+
+	"vcs": {
+		"clientKind": "git",
+		"defaultBranch": "main",
+		"enabled": true,
+		"useIgnoreFile": true
+	},
+
+	"organizeImports": {
+		"enabled": true,
+		"ignore": [
+			".vscode/**",
+			"**/node_modules/**",
+			"**/out/**",
+			"**/include/**",
+			"*.code-workspace",
+			"tsconfig.json",
+			"garbage/**"
+		]
+	},
+
+	"linter": {
+		"enabled": false,
+		"ignore": [".vscode/**", "node_modules/**", "*.code-workspace", "tsconfig.json", "garbage/**"]
+	},
+
+	"json": {
+		"assists": {
+			"enabled": true
+		},
+		"formatter": {
+			"enabled": true,
+			"indentStyle": "tab",
+			"indentWidth": 4,
+			"lineEnding": "lf",
+			"lineWidth": 120,
+			"trailingCommas": "none"
+		},
+		"linter": {
+			"enabled": true
+		},
+		"parser": {
+			"allowComments": false,
+			"allowTrailingCommas": false
+		}
+	},
+
+	"overrides": [
+		{
+			"include": [".vscode/**", "*.code-workspace", "*.code-snippets"],
+			"ignore": ["garbage/**"],
+			"json": {
+				"parser": {
+					"allowComments": true,
+					"allowTrailingCommas": true
+				},
+				"formatter": {
+					"enabled": true,
+					"indentStyle": "tab",
+					"indentWidth": 4,
+					"lineWidth": 120,
+					"trailingCommas": "all"
+				},
+				"linter": {
+					"enabled": true
+				}
+			}
+		},
+		{
+			"include": [".vscode/settings.json"],
+			"ignore": ["garbage/**"],
+			"json": {
+				"parser": {
+					"allowComments": false,
+					"allowTrailingCommas": false
+				},
+				"formatter": {
+					"enabled": true,
+					"indentStyle": "tab",
+					"indentWidth": 4,
+					"lineWidth": 120,
+					"trailingCommas": "none"
+				},
+				"linter": {
+					"enabled": true
+				}
+			}
+		}
+	]
+}

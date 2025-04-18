@@ -1,0 +1,10 @@
+{
+	"name": "log",
+	"private": true,
+	"scripts": {},
+	"devDependencies": {
+		"@biomejs/biome": "1.9.4",
+		"concurrently": "^9.1.2",
+		"rimraf": "^6.0.1"
+	}
+}

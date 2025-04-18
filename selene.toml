@@ -1,1 +1,9 @@
-std = "roblox+luau"
+std = "roblox"
+
+[config]
+# Allow for `_G.__DEV__` (etc) with packages like React-lua
+global_usage = { ignore_pattern = "(^__)|(^NOCOLOR)" }
+
+[lints]
+high_cyclomatic_complexity = "warn" # Or "deny"
+# roblox_manual_fromscale_or_fromoffset = "warn"

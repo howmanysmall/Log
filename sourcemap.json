@@ -1,1 +1,0 @@
-{"name":"Log","className":"ModuleScript","filePaths":["src\\init.luau","default.project.json"],"children":[{"name":"GcTracker","className":"ModuleScript","filePaths":["src\\GcTracker.luau"]},{"name":"ClassDefinition","className":"ModuleScript","filePaths":["src\\ClassDefinition.luau"]},{"name":"InfoLog","className":"ModuleScript","filePaths":["src\\InfoLog.luau"]}]}

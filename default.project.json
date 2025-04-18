@@ -1,6 +1,4 @@
 {
-  "name": "Log",
-  "tree": {
-    "$path": "src"
-  }
+	"name": "Log",
+	"tree": { "$path": "src" }
 }

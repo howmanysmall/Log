@@ -1,0 +1,13 @@
+{
+	"luau-lsp.types.definitionFiles": [],
+	"luau-lsp.completion.imports.ignoreGlobs": [],
+	"luau-lsp.ignoreGlobs": ["**/_Index/**", "**/node_modules/**"],
+	"luau-lsp.index.maxFiles": 1500,
+	"[json]": {
+		"editor.quickSuggestions": {
+			"strings": true
+		},
+		"editor.suggest.insertMode": "replace",
+		"editor.defaultFormatter": "biomejs.biome"
+	}
+}
