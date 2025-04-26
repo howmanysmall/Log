@@ -1,4 +1,4 @@
---!native
+--!nonstrict
 --!optimize 2
 
 -- Log
@@ -192,7 +192,7 @@ local function ToSeconds(n, timeUnit)
 	end
 end
 
-local LogItems = setmetatable({}, {__mode = "k"})
+local LogItems = (setmetatable({}, {__mode = "k"}) :: unknown) :: {[LogItem]: boolean}
 
 local LogItem = {}
 LogItem.ClassName = "LogItem"
@@ -210,7 +210,7 @@ function LogItem.new(log, levelName, traceback, key, isDisabled: boolean, level)
 		_key = key;
 	}, LogItem)
 
-	LogItems[self] = true
+	LogItems[(self :: unknown) :: LogItem] = true
 	return self
 end
 
@@ -697,17 +697,93 @@ function Log:__tostring()
 	return `Log<{self._name}>`
 end
 
+type Level = "Trace" | "Debug" | "Info" | "Warning" | "Error" | "Fatal"
+type LogConfigurationEntry = {
+	Client: Level,
+	Server: Level,
+
+	GameId: number?,
+	GameIds: {number}?,
+
+	PlaceId: number?,
+	PlaceIds: {number}?,
+}
+type LevelOrEntry = Level | LogConfigurationEntry
+type LogConfiguration = {
+	Default: LevelOrEntry?,
+	Studio: LevelOrEntry?,
+	[string]: LevelOrEntry?,
+}
+
+local function Resolve(levelOrEntry: Level | LogConfigurationEntry): Level
+	if type(levelOrEntry) == "string" then
+		return levelOrEntry
+	end
+
+	return if IS_SERVER then levelOrEntry.Server else levelOrEntry.Client
+end
+local function GetLogLevel(parseConfiguration: LogConfiguration | Level): Level
+	if type(parseConfiguration) == "string" then
+		return Resolve(parseConfiguration)
+	end
+
+	local castBecauseLuauSucks = parseConfiguration :: LogConfiguration
+
+	if IS_STUDIO then
+		local studioConfiguration = castBecauseLuauSucks.Studio
+		if studioConfiguration then
+			return Resolve(studioConfiguration :: Level)
+		end
+	end
+
+	local matchedKey: string? = nil
+	local matchedEntry: LevelOrEntry? = nil
+
+	for key, value in (castBecauseLuauSucks :: unknown) :: {[string]: LevelOrEntry} do
+		if key == "Studio" or key == "Default" or type(value) == "string" then
+			continue
+		end
+
+		local valueCastLuauSucks = (value :: unknown) :: LogConfigurationEntry
+
+		local hasHit = (valueCastLuauSucks.GameId and game.GameId == valueCastLuauSucks.GameId)
+			or (valueCastLuauSucks.GameIds and table.find(valueCastLuauSucks.GameIds, game.GameId) ~= nil)
+			or (valueCastLuauSucks.PlaceId and game.PlaceId == valueCastLuauSucks.PlaceId)
+			or (valueCastLuauSucks.PlaceIds and table.find(valueCastLuauSucks.PlaceIds, game.PlaceId) ~= nil)
+
+		if hasHit then
+			if matchedEntry then
+				error(`More than one LogConfig mapping matched ({matchedKey} and {key})`)
+			end
+
+			matchedEntry = valueCastLuauSucks
+			matchedKey = key
+		end
+	end
+
+	if matchedEntry then
+		return Resolve(matchedEntry)
+	end
+
+	local default = castBecauseLuauSucks.Default
+	if default then
+		return Resolve(default :: LevelOrEntry)
+	end
+
+	error("No matching LogConfiguration entry and Default is not defined")
+end
+
 -- Determine log level:
 do
-	local function SetLogLevel(name)
+	local function SetLogLevel(name: string): ()
 		local n = string.lower(name)
-		for levelName, level in Log.Level do
+		for levelName, level in Log.Level :: {[string]: number} do
 			if string.lower(levelName) == n then
 				-- 	if IS_STUDIO then
-				local attr = IS_SERVER and "LogLevel" or "LogLevelClient"
+				local attribute = if IS_SERVER then "LogLevel" else "LogLevelClient"
 				local displayName = string.upper(string.sub(n, 1, 1)) .. string.sub(n, 2)
-				if tostring(Workspace:GetAttribute(attr) or "") ~= displayName then
-					Workspace:SetAttribute(attr, displayName)
+				if tostring(Workspace:GetAttribute(attribute) or "") ~= displayName then
+					Workspace:SetAttribute(attribute, displayName)
 				end
 				-- 	end
 
@@ -729,118 +805,119 @@ do
 		"LogConfig must return a table or a string; got " .. configType
 	)
 
-	if configType == "string" then
-		SetLogLevel(config)
-	else
-		if IS_STUDIO and config.Studio then
-			local studioConfigType = type(config.Studio)
-			assert(
-				studioConfigType == "table" or studioConfigType == "string",
-				"LogConfig.Studio must be a table or a string; got " .. studioConfigType
-			)
+	SetLogLevel(GetLogLevel(config))
+	-- if configType == "string" then
+	-- 	SetLogLevel(config)
+	-- else
+	-- 	if IS_STUDIO and config.Studio then
+	-- 		local studioConfigType = type(config.Studio)
+	-- 		assert(
+	-- 			studioConfigType == "table" or studioConfigType == "string",
+	-- 			"LogConfig.Studio must be a table or a string; got " .. studioConfigType
+	-- 		)
 
-			if studioConfigType == "string" then
-				-- Config for Studio:
-				SetLogLevel(config.Studio)
-			else
-				-- Server/Client config for Studio:
-				if IS_SERVER then
-					local studioServerLevel = config.Studio.Server
-					assert(
-						type(studioServerLevel) == "string",
-						"LogConfig.Studio.Server must be a string; got " .. type(studioServerLevel)
-					)
+	-- 		if studioConfigType == "string" then
+	-- 			-- Config for Studio:
+	-- 			SetLogLevel(config.Studio)
+	-- 		else
+	-- 			-- Server/Client config for Studio:
+	-- 			if IS_SERVER then
+	-- 				local studioServerLevel = config.Studio.Server
+	-- 				assert(
+	-- 					type(studioServerLevel) == "string",
+	-- 					"LogConfig.Studio.Server must be a string; got " .. type(studioServerLevel)
+	-- 				)
 
-					SetLogLevel(studioServerLevel)
-				else
-					local studioClientLevel = config.Studio.Client
-					assert(
-						type(studioClientLevel) == "string",
-						"LogConfig.Studio.Client must be a string; got " .. type(studioClientLevel)
-					)
+	-- 				SetLogLevel(studioServerLevel)
+	-- 			else
+	-- 				local studioClientLevel = config.Studio.Client
+	-- 				assert(
+	-- 					type(studioClientLevel) == "string",
+	-- 					"LogConfig.Studio.Client must be a string; got " .. type(studioClientLevel)
+	-- 				)
 
-					SetLogLevel(studioClientLevel)
-				end
-			end
-		else
-			local default = nil
-			local numDefault = 0
-			local set = false
-			local setK = nil
-			for k, specialConfig in config do
-				if k == "Studio" then
-					continue
-				end
+	-- 				SetLogLevel(studioClientLevel)
+	-- 			end
+	-- 		end
+	-- 	else
+	-- 		local default = nil
+	-- 		local numDefault = 0
+	-- 		local set = false
+	-- 		local setK = nil
+	-- 		for k, specialConfig in config do
+	-- 			if k == "Studio" then
+	-- 				continue
+	-- 			end
 
-				if type(specialConfig) == "string" then
-					default = specialConfig
-					numDefault += 1
-				elseif type(specialConfig) == "table" then
-					-- Check if config can be used if filtered by PlaceId or GameId:
-					local canUse, fallthrough = false, false
-					if type(specialConfig.PlaceId) == "number" then
-						canUse = specialConfig.PlaceId == game.PlaceId
-					elseif type(specialConfig.PlaceIds) == "table" then
-						canUse = table.find(specialConfig.PlaceIds, game.PlaceId) ~= nil
-					elseif type(specialConfig.GameId) == "number" then
-						canUse = specialConfig.GameId == game.GameId
-					elseif type(specialConfig.GameIds) == "table" then
-						canUse = table.find(specialConfig.GameIds, game.GameId) ~= nil
-					else
-						canUse = true
-						fallthrough = true
-					end
+	-- 			if type(specialConfig) == "string" then
+	-- 				default = specialConfig
+	-- 				numDefault += 1
+	-- 			elseif type(specialConfig) == "table" then
+	-- 				-- Check if config can be used if filtered by PlaceId or GameId:
+	-- 				local canUse, fallthrough = false, false
+	-- 				if type(specialConfig.PlaceId) == "number" then
+	-- 					canUse = specialConfig.PlaceId == game.PlaceId
+	-- 				elseif type(specialConfig.PlaceIds) == "table" then
+	-- 					canUse = table.find(specialConfig.PlaceIds, game.PlaceId) ~= nil
+	-- 				elseif type(specialConfig.GameId) == "number" then
+	-- 					canUse = specialConfig.GameId == game.GameId
+	-- 				elseif type(specialConfig.GameIds) == "table" then
+	-- 					canUse = table.find(specialConfig.GameIds, game.GameId) ~= nil
+	-- 				else
+	-- 					canUse = true
+	-- 					fallthrough = true
+	-- 				end
 
-					if not fallthrough then
-						assert(
-							not set,
-							string.format("More than one LogConfig mapping matched (%* and %*)", setK or "", k or "")
-						)
-					end
+	-- 				if not fallthrough then
+	-- 					assert(
+	-- 						not set,
+	-- 						string.format("More than one LogConfig mapping matched (%* and %*)", setK or "", k or "")
+	-- 					)
+	-- 				end
 
-					if canUse then
-						if IS_SERVER then
-							local serverLevel = specialConfig.Server
-							assert(
-								type(serverLevel) == "string",
-								string.format("LogConfig.%*.Server must be a string; got %*", k, type(serverLevel))
-							)
+	-- 				if canUse then
+	-- 					if IS_SERVER then
+	-- 						local serverLevel = specialConfig.Server
+	-- 						assert(
+	-- 							type(serverLevel) == "string",
+	-- 							string.format("LogConfig.%*.Server must be a string; got %*", k, type(serverLevel))
+	-- 						)
 
-							SetLogLevel(serverLevel)
-							set = true
-							setK = k
-						else
-							local clientLevel = specialConfig.Client
-							assert(
-								type(clientLevel) == "string",
-								string.format("LogConfig.%*.Client must be a string; got %*", k, type(clientLevel))
-							)
+	-- 						SetLogLevel(serverLevel)
+	-- 						set = true
+	-- 						setK = k
+	-- 					else
+	-- 						local clientLevel = specialConfig.Client
+	-- 						assert(
+	-- 							type(clientLevel) == "string",
+	-- 							string.format("LogConfig.%*.Client must be a string; got %*", k, type(clientLevel))
+	-- 						)
 
-							SetLogLevel(clientLevel)
-							set = true
-							setK = k
-						end
-					end
-				else
-					warn(string.format("LogConfig.%* must be a table or a string; got %*", k, typeof(specialConfig)))
-				end
-			end
+	-- 						SetLogLevel(clientLevel)
+	-- 						set = true
+	-- 						setK = k
+	-- 					end
+	-- 				end
+	-- 			else
+	-- 				warn(string.format("LogConfig.%* must be a table or a string; got %*", k, typeof(specialConfig)))
+	-- 			end
+	-- 		end
 
-			if numDefault > 1 then
-				warn("Ambiguous default logging level")
-			end
+	-- 		if numDefault > 1 then
+	-- 			warn("Ambiguous default logging level")
+	-- 		end
 
-			if default and not set then
-				SetLogLevel(default)
-			end
-		end
-	end
+	-- 		if default and not set then
+	-- 			SetLogLevel(default)
+	-- 		end
+	-- 	end
+	-- end
 
 	assert(type(logLevel) == "number", "LogLevel failed to be determined")
 	-- if IS_STUDIO then
-	local attr = IS_SERVER and "LogLevel" or "LogLevelClient"
-	Workspace:GetAttributeChangedSignal(attr):Connect(function()
-		SetLogLevel(Workspace:GetAttribute(attr))
+	local attribute = if IS_SERVER then "LogLevel" else "LogLevelClient"
+	Workspace:GetAttributeChangedSignal(attribute):Connect(function()
+		SetLogLevel(Workspace:GetAttribute(attribute))
 	end)
 	-- end
 end
